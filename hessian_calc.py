@@ -5,11 +5,7 @@ import sys
 import scipy.optimize as so
 import streamteam.integrate as si
 from streamteam.potential.lm10 import LM10Potential
-#import genfunc_3d
-#import toy_potentials
-#import test_potentials
 import astropy.units as u
-#from astropy.coordinates import frame_transform_graph
 from streamteam.dynamics.actionangle import find_actions, fit_isochrone
 from streamteam.potential import IsochronePotential
 import logging
@@ -153,15 +149,14 @@ def eigenvalues_Hessian():
 
 
 
+
+#-----------To currently run code-----------#(will be more elegant when entire code is written)
 w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
 params = grid_of_J_theta_orbit(w0)
 #I now want to check that the outputted grid of J/theta matches the inputted grid if we use the isochrone                                        
 
-actions = params[:,:3]                                                                                                                         
-#angles = params[:,1,:3]                                                                                                                        
-#freqs = params[:,1,:3]                                                                                                                         
+actions = params[:,:3]                                                                                                                    
 print '---------New actions from x,v -> J, theta----------'
-print actions                                                                                                                                  #
-print '---------Inputted actions from grid----------'                                                                                          #
-#print action_array[:2,:]                                                                                  
-#Make a check to see if going back from (x,v)-(J,theta) yields the same (J,theta) as before                
+print actions                                                                                                                             
+print '---------Inputted actions from grid----------'                                                                                     
+
