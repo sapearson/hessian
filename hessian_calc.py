@@ -30,7 +30,7 @@ def find_J_theta(w0):
 #v_new = ([-56.969978, -100.396842, -3.323685]*u.km/u.s).to(u.kpc/u.Myr).value
 #print v_new
 
-    w0 = w0 #[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917] #[x]=kpc and [v]=kpc/MYR
+#    w0 = w0 #[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917] #[x]=kpc and [v]=kpc/MYR
     t,w = integrator.run(w0, dt=1., nsteps=6000)
     usys = (u.kpc, u.Myr, u.Msun) #Our init system
 
@@ -49,30 +49,38 @@ def find_J_theta(w0):
 #Our units are [actions] = kpc*kpc/Myr (where Sanders' are kpc*km/s)
 # Below we store the best fit parameters from Isochrone potential
     M, b = fit_isochrone(w,usys=usys)
-    return actions,angles,freqs,M,b   
+    Iso = IsochronePotential(M,b,usys=usys)
+    return actions,angles,freqs,M,b,Iso   
 
 #------------------------------------------------Step 2----------------------------------------------------------#
 #Take a grid of (J,theta), use best toy (isocrhone) to analytically convert to (x,v)
-def grid_of_xv(w0):
-    """The function computes grid of x,y,z,vx,vy,vz around initial inputted orbit.
-    The grid is computed in action/angle space around the J,theta for the particular orbit,
-    and then f(w) finds the x,y,z,vx,vy,vz grid, which is outputted."""
+def grid_of_AA(w0):
+    """This function creates a grid of action/angles around the actual action and angle for inputted orbit"""
     usys = (u.kpc, u.Myr, u.Msun)
 
-#Start with the actions and angles for the orbit above and maka a grid of actions
+#Start with the actions and angles for the orbit above and maka a grid of actions                                                        
     ngrid = 5
-    fractional_stepsize = np.linspace(0.8,1.2,ngrid).reshape(1,5) #20% variation
-    actions,angles,freqs,M,b = find_J_theta(w0)
-    Pal5_actions =  actions #nd.array(3,)
-    action_grid = fractional_stepsize * Pal5_actions.reshape(3,1) # Computes 3x5 "matrix" with J1,J2,J3 and the 20 % variations
-    action_grid = np.meshgrid(*action_grid)  #We want a 3D grid with all combinations of the J1,J2,J3s, not sure about * 
-    J1,J2,J3 = map(np.ravel,action_grid) #Flattens the 5x5x5 3d grids, (ask adr)
-    action_array = np.vstack((J1,J2,J3)).T #We now stack them and have a 125x3 array with all possible combinations
+    fractional_stepsize = np.linspace(0.8,1.2,ngrid).reshape(1,5) #20% variation                                                         
+    actions,angles,freqs,M,b,Iso = find_J_theta(w0)
+    Pal5_actions =  actions #nd.array(3,)                                                                                                
+    action_grid = fractional_stepsize * Pal5_actions.reshape(3,1) # Computes 3x5 "matrix" with J1,J2,J3 and the 20 % variations          
+    action_grid = np.meshgrid(*action_grid)  #We want a 3D grid with all combinations of the J1,J2,J3s, not sure about *                  
+    J1,J2,J3 = map(np.ravel,action_grid) #Flattens the 5x5x5 3d grids, (ask adr)                                                         
+    action_array = np.vstack((J1,J2,J3)).T #We now stack them and have a 125x3 array with all possible combinations                      
     angle_array = angles.reshape(1,3)
+    return action_array,angle_array
 
+
+def grid_of_xv(w0):
+    """The function computes grid of x,y,z,vx,vy,vz around initial inputted orbit.
+    The grid is computed in action/angle space around the J,theta for the particular orbit using the 'grid_of_AA() function',
+    and then f(w) finds the x,y,z,vx,vy,vz grid, which is outputted."""
+    usys = (u.kpc, u.Myr, u.Msun)
+    actions,angles,freqs,M,b,Iso = find_J_theta(w0)
 #First we want to go from our J,theta grid to x,v so we can run orbits in LM10
 # function to minimize f to get w = (x,v)
-    Iso = IsochronePotential(M,b,usys=usys)
+   # Iso = IsochronePotential(M,b,usys=usys)
+    action_array,angle_array = grid_of_AA(w0)
     def f(w,action_array,angle_array):
         try:
             J_prime,theta_prime = Iso.action_angle(w[:3],w[3:])
@@ -94,8 +102,7 @@ def grid_of_xv(w0):
         xv_coordinates.append(np.median(root_w,axis=0)) #median of all the output from f(w)
 #The array below is what we want for initial conditions for the new orbits from grid
     xv_coordinates = np.array(xv_coordinates)   # we want array instead of list
-    return xv_coordinates, Iso
-
+    return xv_coordinates
 
 #-----------------------------------------------Step 3-----------------------------------------------------------#
 #Integrate orbits for all (x,v) on grid in LM10
@@ -104,8 +111,9 @@ def grid_of_xv(w0):
 #Basically same step as step 1, but loop over all new orbits
 def grid_of_J_theta_orbit(w0):
     """We now get action/angle grid for desired orbit. This will be used to calculate the Hessian for this orbit."""
+    actions,angles,freqs,M,b,Iso = find_J_theta(w0)
     params = []
-    xv_coordinates, Iso = grid_of_xv(w0)
+    xv_coordinates = grid_of_xv(w0)
     n=2
     acceleration = lambda t, *args: Iso.acceleration(*args)
     integrator = si.LeapfrogIntegrator(acceleration)
@@ -159,4 +167,5 @@ actions = params[:,:3]
 print '---------New actions from x,v -> J, theta----------'
 print actions                                                                                                                             
 print '---------Inputted actions from grid----------'                                                                                     
-
+action_array,angle_array = grid_of_AA(w0)
+print action_array[:2,:]
