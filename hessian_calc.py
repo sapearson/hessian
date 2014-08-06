@@ -12,6 +12,10 @@ import logging
 from astropy import log as logger
 logger.setLevel(logging.DEBUG)
 #np.random.seed(42)
+#Current issues: it uses the orbit integration function in several steps. I could write that smarter.
+
+
+
 
 #------------------------------------------------Step 1----------------------------------------------------------#
 # Find (J,theta) for Pal 5 (stream fannining) in LM10 using Sanders' code
@@ -55,8 +59,7 @@ def find_J_theta(w0):
 #------------------------------------------------Step 2----------------------------------------------------------#
 #Take a grid of (J,theta), use best toy (isocrhone) to analytically convert to (x,v)
 def grid_of_AA(w0):
-    """This function creates a grid of action/angles around the actual action and angle for inputted orbit"""
-    usys = (u.kpc, u.Myr, u.Msun)
+    """This function outputs a grid of action/angles around the actual action and angle for inputted orbit"""
 
 #Start with the actions and angles for the orbit above and maka a grid of actions                                                        
     ngrid = 5
@@ -75,11 +78,10 @@ def grid_of_xv(w0):
     """The function computes grid of x,y,z,vx,vy,vz around initial inputted orbit.
     The grid is computed in action/angle space around the J,theta for the particular orbit using the 'grid_of_AA() function',
     and then f(w) finds the x,y,z,vx,vy,vz grid, which is outputted."""
-    usys = (u.kpc, u.Myr, u.Msun)
+
     actions,angles,freqs,M,b,Iso = find_J_theta(w0)
 #First we want to go from our J,theta grid to x,v so we can run orbits in LM10
 # function to minimize f to get w = (x,v)
-   # Iso = IsochronePotential(M,b,usys=usys)
     action_array,angle_array = grid_of_AA(w0)
     def f(w,action_array,angle_array):
         try:
@@ -154,7 +156,6 @@ def freq_check():
 def eigenvalues_Hessian():
     """Calculate the three eigenvalues of Hessian for a given orbit"""
     return #lamda1,lambda2,lambda3
-
 
 
 
