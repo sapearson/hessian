@@ -1,3 +1,12 @@
+# coding: utf-8
+
+"""This code takes initial conditions (x,y,z,vx,vy,vz) in kpc and kpc/Myr for an orbit in an arbitrary potential 
+and returns the Eigenvalues of the Hessian for this orbit. 
+The main function is eigenvalues_Heassian() which outputs the three eigenvalues for the orbit inputted. 
+The action/angles/frequencies are also calculated for this orbit. """
+
+__author__ = "spearson <spearson@astro.columbia.edu>"
+
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
@@ -11,10 +20,11 @@ from streamteam.potential import IsochronePotential
 import logging
 from astropy import log as logger
 logger.setLevel(logging.DEBUG)
+
+cache_path = "/home/spearson/Hessian/stream-team/hessian"
+
 #np.random.seed(42)
 #Current issues: it uses the orbit integration function in several steps. I could write that smarter.
-
-
 
 
 #------------------------------------------------Step 1----------------------------------------------------------#
@@ -164,9 +174,10 @@ w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917
 params = grid_of_J_theta_orbit(w0)
 #I now want to check that the outputted grid of J/theta matches the inputted grid if we use the isochrone                                        
 
-actions = params[:,:3]                                                                                                                    
+actions = params[:,:3]                                                                                               
+action_array,angle_array = grid_of_AA(w0)                     
 print '---------New actions from x,v -> J, theta----------'
 print actions                                                                                                                             
 print '---------Inputted actions from grid----------'                                                                                     
-action_array,angle_array = grid_of_AA(w0)
+#action_array,angle_array = grid_of_AA(w0)
 print action_array[:2,:]
