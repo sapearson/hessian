@@ -49,7 +49,6 @@ def find_J_theta(w0):
 
 #    w0 = w0 #[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917] #[x]=kpc and [v]=kpc/MYR
     t,w = integrator.run(w0, dt=1., nsteps=6000)
-    usys = (u.kpc, u.Myr, u.Msun) #Our init system
 
 # w is now the orbit with shape (time, number of orbits, number of dimensions)
 # so in this case it is (6000, 1, 6) -- e.g., to plot the orbit in the
@@ -66,6 +65,7 @@ def find_J_theta(w0):
 #Our units are [actions] = kpc*kpc/Myr (where Sanders' are kpc*km/s)
 # Below we store the best fit parameters from Isochrone potential
     M, b = fit_isochrone(w,usys=usys)
+    print actions, angles
     Iso = IsochronePotential(M,b,usys=usys)
     return actions,angles,freqs,M,b,Iso   
 
@@ -76,7 +76,7 @@ def grid_of_AA(w0):
 
 #Start with the actions and angles for the orbit above and maka a grid of actions                                                        
     ngrid = 5
-    fractional_stepsize = np.linspace(0.8,1.2,ngrid).reshape(1,5) #20% variation                                                         
+    fractional_stepsize = np.linspace(0.9,1.1,ngrid).reshape(1,5) #20% variation                                                         
     actions,angles,freqs,M,b,Iso = find_J_theta(w0)
     Pal5_actions =  actions #nd.array(3,)                                                                                                
     action_grid = fractional_stepsize * Pal5_actions.reshape(3,1) # Computes 3x5 "matrix" with J1,J2,J3 and the 20 % variations          
@@ -94,9 +94,9 @@ def spol_to_cart(r,p,t,p_r,p_p,p_t):
     x1 = r*np.sin(t)*np.cos(p)
     x2 = r*np.sin(t)*np.sin(p)
     x3 = r*np.cos(t)
-    v1 = np.cos(t)*np.cos(p)*p_r + r*np.cos(t)*np.sin(p)*p_p + r*np.sin(t)*np.sin(p)*p_t
-    v2 = np.cos(t)*np.sin(p)*p_r - r*np.cos(t)*np.cos(p)*p_p + r*np.sin(t)*np.sin(p)*p_t
-    v3 = np.sin(t)*p_r - r*np.cos(t)*p_t
+    v1 = np.cos(p)*np.sin(t)*p_r - r*np.sin(p)*np.sin(t)*p_p + r*np.cos(p)*np.cos(t)*p_t#np.cos(t)*np.cos(p)*p_r + r*np.cos(t)*np.sin(p)*p_p + r*np.sin(t)*np.cos(p)*p_t
+    v2 = np.sin(p)*np.sin(t)*p_r + r*np.cos(p)*np.sin(t)*p_p + r*np.sin(p)*np.cos(t)*p_t#np.cos(t)*np.sin(p)*p_r - r*np.cos(t)*np.cos(p)*p_p + r*np.sin(t)*np.sin(p)*p_t
+    v3 = np.cos(t)*p_r-r*np.sin(t)*p_t#np.sin(t)*p_r - r*np.cos(t)*p_t
 
     return np.array([x1,x2,x3,v1,v2,v3])
 
@@ -113,10 +113,10 @@ def angact_to_xv_iso(act,ang,M,b):
     Lz = act[0,1]                    #This is J2                                                     
     L = act[0,2]+Lz                 #J3+J2 (A8)                                              
     l_s = np.sqrt(1-(Lz**2/L**2))        #A9   
-    H = (-2*k**2)/(2*act[0,0]+L+np.sqrt(4*b*k+L**2))**2     #A7                                 
-    a = -k/(2*H)-b                       #A10                                             
-    e = np.sqrt(1+L**2/(2*H*a**2))       #A11                                             
-    omega = np.sqrt(k)/(2*(a+b)**(3/2)) * (1+L/(np.sqrt(4*b*k+L**2)))                    
+    H = (-2.*k**2)/(2.*act[0,0]+L+np.sqrt(4.*b*k+L**2))**2     #A7                                 
+    a = -k/(2.*H)-b                       #A10                                             
+    e = np.sqrt(1+L**2/(2.*H*a**2))       #A11                                             
+    omega = np.sqrt(k)/(2.*(a+b)**(3/2)) * (1. + L/(np.sqrt(4*b*k+L**2)))                    
     
     def psi_func(x,a,e,b,ang):
         """This function is defined to solve for psi in A12
@@ -135,7 +135,8 @@ def angact_to_xv_iso(act,ang,M,b):
     u_f = np.arcsin(1/np.tan(theta)*np.sqrt(1/l_s**2-1)) # we need this to find phi (Sander's code)
     phi = ang[0,1]+u_f-np.sign(Lz)*ang[0,2]  #ang2, ang3
     p_r = np.sqrt(k/(a+b))*(a*e*np.sin(psi))/r    #A15                                    
-    p_t = L*l_s*np.cos(chi)/np.cos(phi)      #A15                                                                                                  p_p = Lz                                                                              
+    p_t = L*l_s*np.cos(chi)/np.cos(theta)      #A15                                      
+    p_p = Lz                                                                            
     
     # We now need to convert from spherical polar coord to cart. coord.                   
     xv_coordinates = spol_to_cart(r,phi,theta,p_r,p_p,p_t)                       
@@ -143,11 +144,14 @@ def angact_to_xv_iso(act,ang,M,b):
     
     return xv_coordinates                                           
 
-#w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
-#act,ang =grid_of_AA(w0)
-#a,an,fr,M,b,Iso = find_J_theta(w0)
-#xv_cootcinates,psi = angact_to_xv_iso(act,ang,M,b)
-#print psi
+
+w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
+act,ang =grid_of_AA(w0)
+a,an,fr,M,b,Iso = find_J_theta(w0)
+xv_coordinates = angact_to_xv_iso(act,ang,M,b)
+print act[0,:],ang[0,:]
+
+print xv_coordinates
 
 #def grid_of_xv(w0):
  #   """Loop over function above so we ge grid of x,v not just x,v"""
