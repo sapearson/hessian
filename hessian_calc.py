@@ -65,7 +65,7 @@ def find_J_theta(w0):
 #Our units are [actions] = kpc*kpc/Myr (where Sanders' are kpc*km/s)
 # Below we store the best fit parameters from Isochrone potential
     M, b = fit_isochrone(w,usys=usys)
-    print actions, angles
+    #print actions, angles
     Iso = IsochronePotential(M,b,usys=usys)
     return actions,angles,freqs,M,b,Iso   
 
@@ -84,6 +84,7 @@ def grid_of_AA(w0):
     J1,J2,J3 = map(np.ravel,action_grid) #Flattens the 5x5x5 3d grids, (ask adr)                                                         
     action_array = np.vstack((J1,J2,J3)).T #We now stack them and have a 125x3 array with all possible combinations                      
     angle_array = angles.reshape(1,3)
+    angle_array = np.squeeze(angle_array)
     return action_array,angle_array
 
 
@@ -98,22 +99,25 @@ def spol_to_cart(r,p,t,p_r,p_p,p_t):
     v2 = np.sin(p)*np.sin(t)*p_r + r*np.cos(p)*np.sin(t)*p_p + r*np.sin(p)*np.cos(t)*p_t#np.cos(t)*np.sin(p)*p_r - r*np.cos(t)*np.cos(p)*p_p + r*np.sin(t)*np.sin(p)*p_t
     v3 = np.cos(t)*p_r-r*np.sin(t)*p_t#np.sin(t)*p_r - r*np.cos(t)*p_t
 
-    return np.array([x1,x2,x3,v1,v2,v3])
+    #XV = x1,x2,x3,v1,v2,v3
+    X = x1,x2,x3
+    V = v1,v2,v3
+    return X,V
 
 def angact_to_xv_iso(act,ang,M,b):                                                        
     """Calculate x and v for a given set of agtion angles using the analytically          
     solvable isochrone potential with best fit parameters b and M.                        
     Function takes in array of action and angles (1x3,1x3) and the best fit parameters for b         
-    and M in the isocrhone potential and returns x1,x2,x3,v1,v2,v3 for those action       
+    and M in the isocrhone potential and returns X,V = [( x1,x2,x3), (v1,v2,v3)] for those action       
     angles.                                                                               
     We use Appendix 2 in McGill&Binney 1990
     J1,2,3 = Jr,phi,theta = Jr,Lz,L-Lz"""                                            
 
     k = G*M                                                                               
-    Lz = act[0,1]                    #This is J2                                                     
-    L = act[0,2]+Lz                 #J3+J2 (A8)                                              
+    Lz = act[1]                    #This is J2                                                     
+    L = act[2]+Lz                 #J3+J2 (A8)                                              
     l_s = np.sqrt(1-(Lz**2/L**2))        #A9   
-    H = (-2.*k**2)/(2.*act[0,0]+L+np.sqrt(4.*b*k+L**2))**2     #A7                                 
+    H = (-2.*k**2)/(2.*act[0]+L+np.sqrt(4.*b*k+L**2))**2     #A7                                 
     a = -k/(2.*H)-b                       #A10                                             
     e = np.sqrt(1+L**2/(2.*H*a**2))       #A11                                             
     omega = np.sqrt(k)/(2.*(a+b)**(3/2)) * (1. + L/(np.sqrt(4*b*k+L**2)))                    
@@ -122,7 +126,7 @@ def angact_to_xv_iso(act,ang,M,b):
         """This function is defined to solve for psi in A12
         It takes in an array of initial guesses for psi (x),a,e,b,ang
         and returns function A12 for which we can find the roots."""
-        return x - a*e/(a+b)*np.sin(x) - ang[0,0]  #A12: Function to get psi                          
+        return x - a*e/(a+b)*np.sin(x) - ang[0]  #A12: Function to get psi                          
     x = np.pi/2.
     sol = so.root(psi_func,x, (a,e,b,ang))
     psi = sol.x
@@ -130,37 +134,34 @@ def angact_to_xv_iso(act,ang,M,b):
     r = a*np.sqrt((1-e*np.cos(psi))*(1-e*np.cos(psi)+2*b/a)) #A13                            
     Gamma = np.sqrt((a+b)/k)*((a+b)*psi-a*e*np.sin(psi))  # A16                           
     Lambda = np.arctan(np.sqrt((1+e)/(1-e))*np.tan(0.5*psi)) + L/(np.sqrt(L**2+4*b*k))*np.arctan(np.sqrt((a*(1+e)+2*b)/(a*(1-e)+2*b))*np.tan(0.5*psi))   #A17
-    chi = ang[0,2] - omega*Gamma + Lambda     #A13                                              
+    chi = ang[2] - omega*Gamma + Lambda     #A13                                              
     theta = np.arcsin(l_s*np.sin(chi))# A14                                              
     u_f = np.arcsin(1/np.tan(theta)*np.sqrt(1/l_s**2-1)) # we need this to find phi (Sander's code)
-    phi = ang[0,1]+u_f-np.sign(Lz)*ang[0,2]  #ang2, ang3
+    phi = ang[1]+u_f-np.sign(Lz)*ang[2]  #ang2, ang3
     p_r = np.sqrt(k/(a+b))*(a*e*np.sin(psi))/r    #A15                                    
     p_t = L*l_s*np.cos(chi)/np.cos(theta)      #A15                                      
     p_p = Lz                                                                            
     
     # We now need to convert from spherical polar coord to cart. coord.                   
     xv_coordinates = spol_to_cart(r,phi,theta,p_r,p_p,p_t)                       
-    xv_coordinates = np.squeeze(xv_coordinates)
-    
     return xv_coordinates                                           
 
+def grid_of_xv(w0):
+    """Loop over function above so we ge grid of x,v not just x,v
+    This function outputs initial conditions for new "grid-orbits".
+    It outputs an nd.array with shape(n,6) where 6 includes the
+    6-phace space coordinates"""
+    act,ang = grid_of_AA(w0)   #125x3 and 1x3
+    a,an,fr,M,b,Iso = find_J_theta(w0)
+    n = len(act)
+    xv_coordinates_grid = []
+    for k in range(n):
+        X,V = angact_to_xv_iso(act[k,:],ang[:],M,b)
+        xv_coordinates_grid.append(np.append(X[:],V[:])) 
 
-w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
-act,ang =grid_of_AA(w0)
-a,an,fr,M,b,Iso = find_J_theta(w0)
-xv_coordinates = angact_to_xv_iso(act,ang,M,b)
-print act[0,:],ang[0,:]
+    xv_coordinates_grid = np.array(xv_coordinates_grid)
+    return xv_coordinates_grid
 
-print xv_coordinates
-
-#def grid_of_xv(w0):
- #   """Loop over function above so we ge grid of x,v not just x,v"""
-  #  act,ang = grid_of_AA(w0)   #125x3 and 1x3
-   # n = len(act)
-    #n = 2
-   # for k in range(n):
-    #    x_v_coordinates = angact_to_xv_iso(act,ang,M,b)
-        
 #-----------------------------------------------Step 3-----------------------------------------------------------#
 #Integrate orbits for all (x,v) on grid in LM10
 #xv_coordinates are our new initial conditions in usys.
@@ -170,16 +171,15 @@ def grid_of_J_theta_orbit(w0):
     """We now get action/angle grid for desired orbit (in the arbitrary potential).
     This will be used to calculate the Hessian for this orbit."""
     actions,angles,freqs,M,b,Iso = find_J_theta(w0) #actually just do this to get M,b
-    act,ang = grid_of_AA(w0) #get grid of action angles
     params = []
-    xv_coordinates = angact_to_xv_iso(act,ang,M,b) #get grid of x,v from grid of action agnles
+    xv_coordinates = grid_of_xv(w0) #get grid of x,v from grid of action agnles shape (n,6)
     
-    n=1
+    n = len(xv_coordinates) # this should be same as len(act) from action grid
     acceleration = lambda t, *args: Iso.acceleration(*args)
     integrator = si.LeapfrogIntegrator(acceleration)
     for k in range(n):
     #    xv_coordinates, Iso = grid_of_xv(w0)
-        w0 = xv_coordinates[:] #These are our initial conditions for all the new orbits
+        w0 = xv_coordinates[k,:] #These are our initial conditions for all the new orbits
         t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
         usys = (u.kpc, u.Myr, u.Msun) #Our init system                                                                            
         phase_space = np.squeeze(w)
@@ -221,11 +221,10 @@ def eigenvalues_Hessian():
 #-----------To currently run code-----------#(will be more elegant when entire code is written)
 w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
 params = grid_of_J_theta_orbit(w0)
-#I now want to check that the outputted grid of J/theta matches the inputted grid if we use the isochrone                                        
-
+#I now want to check that the outputted grid of J/theta matches the inputted grid if we use the isochrone            
 actions = params[:,:3]                                                                                               
 action_array,angle_array = grid_of_AA(w0)                     
 print '---------New actions from x,v -> J, theta----------'
-print actions                                                                                                                             
-print '---------Inputted actions from grid----------'                                                                                     
+print actions                                                                                                     
+print '---------Inputted actions from grid----------'                                                              
 print action_array[:2,:]
