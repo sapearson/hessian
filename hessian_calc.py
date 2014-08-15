@@ -76,13 +76,14 @@ def grid_of_AA(w0):
 
 #Start with the actions and angles for the orbit above and maka a grid of actions                                                        
     ngrid = 5
-    fractional_stepsize = np.linspace(0.9,1.1,ngrid).reshape(1,5) #20% variation                                                         
+    fractional_stepsize = np.linspace(0.9,1.1,ngrid).reshape(1,ngrid) #20% variation                                                         
     actions,angles,freqs,M,b,Iso = find_J_theta(w0)
     Pal5_actions =  actions #nd.array(3,)                                                                                                
-    action_grid = fractional_stepsize * Pal5_actions.reshape(3,1) # Computes 3x5 "matrix" with J1,J2,J3 and the 20 % variations          
-    action_grid = np.meshgrid(*action_grid)  #We want a 3D grid with all combinations of the J1,J2,J3s, not sure about *                  
-    J1,J2,J3 = map(np.ravel,action_grid) #Flattens the 5x5x5 3d grids, (ask adr)                                                         
-    action_array = np.vstack((J1,J2,J3)).T #We now stack them and have a 125x3 array with all possible combinations                      
+    action_grid = fractional_stepsize * Pal5_actions.reshape(3,1) # Computes 3x5 "matrix" with J1,J2,J3 and the 20 % variations       # I don't need grid, just two points in each direction around each J.   
+    action_array = action_grid.T # Now I have a (5,3) matrix with five different sets of 3 action. The central one is the initial actions.
+    #action_grid = np.meshgrid(*action_grid)  #We want a 3D grid with all combinations of the J1,J2,J3s, not sure about *                  
+    #J1,J2,J3 = map(np.ravel,action_grid) #Flattens the 5x5x5 3d grids, (ask adr)                                                         
+    #action_array = np.vstack((J1,J2,J3)).T #We now stack them and have a 125x3 array with all possible combinations                      
     angle_array = angles.reshape(1,3)
     angle_array = np.squeeze(angle_array)
     return action_array,angle_array
@@ -112,12 +113,11 @@ def angact_to_xv_iso(act,ang,M,b):
     angles.                                                                               
     We use Appendix 2 in McGill&Binney 1990
     J1,2,3 = Jr,phi,theta = Jr,Lz,L-Lz"""                                            
-
     k = G*M                                                                               
     Lz = act[1]                    #This is J2                                                     
     L = act[2]+Lz                 #J3+J2 (A8)                                              
     l_s = np.sqrt(1-(Lz**2/L**2))        #A9   
-    H = (-2.*k**2)/(2.*act[0]+L+np.sqrt(4.*b*k+L**2))**2     #A7                                 
+    H = (-2*k**2)/(2.*act[0]+L+np.sqrt(4.*b*k+L**2))**2     #A7                                 
     a = -k/(2.*H)-b                       #A10                                             
     e = np.sqrt(1+L**2/(2.*H*a**2))       #A11                                             
     omega = np.sqrt(k)/(2.*(a+b)**(3/2)) * (1. + L/(np.sqrt(4*b*k+L**2)))                    
@@ -184,15 +184,20 @@ def grid_of_J_theta_orbit(w0):
         usys = (u.kpc, u.Myr, u.Msun) #Our init system                                                                            
         phase_space = np.squeeze(w)
     #params.append(find_actions(t, phase_space, N_max=6, usys=usys))
-        actions,angles = Iso.action_angle(phase_space[:,:3], phase_space[:,3:])
-        params.append(np.append(actions[0],angles[0]))
+        actions,angles,freq = Iso.action_angle(phase_space[:,:3], phase_space[:,3:]) #chech that I can get frequencies this way!
+        params.append(np.append(actions[0],angles[0]), freq[0]) #check that Iso.action_angle outputs frequencies.
     params = np.array(params)
     return params
 
+#I should plot this new grid of j,theta
+
 #----------------------------------------------Step 5--------------------------------------------------------#
 # Interpolate this new grid of (J,theta) to have uniform grid
-def intorpolate_J_theta_grid():
-    return
+def interpolate_J_theta_grid():
+    """Since we want a uniform grid of J,theta,omega for our Hessian differentiation, we need to 
+    interpolate the grid obtained in function grid_of_J_theta_orbit. Ideally we want it to still just 
+    output a (5x3) matrix for each variable, where the central row is for our actual orbit."""
+    return act,ang,freq
 
 #----------------------------------------------Step 6----------------------------------------------------#
 # Compute second derivative of Hamiltonian with respect to uniform grid of J's
@@ -204,6 +209,39 @@ def hessian_freq():
     """Calculaste Hessian based on derivative of frequencies with respect to J for given orbit"""
     # We will have interpolated frequencies uniform in action/angle space for arbitrary potential.
     # our desired value is the central point of J,theta,omega in this grid?
+    # keep two of J's constant while differentiating with respect to 1.
+    act, ang, freq = interpolate_J_theta_grid()
+    # the actions should still be a grid, let's say they are (5,3), 5 different sets of 3 actions
+    # the frequencies are also a grid of the same size as actions
+    # I will have 9 matrix elements for the hessian. 
+    # freq[2,:] and act[2,:] is all the "center-point/true" of our orbit.
+
+    #Forward scheme, only using some of points on grid
+  #  freq_dif_11 = (freq[3,0]-freq[2,0])/(act[3,0]-act[2,0]) - (freq[4,0]-2*freq[3,0]+freq[2,0])/(2*(act[3,0]-act[2,0]))
+   # freq_dif_12 = (freq[3,0]-freq[2,0])/(act[3,1]-act[2,1]) - (freq[4,0]-2*freq[3,0]+freq[2,0])/(2*(act[3,1]-act[2,1]))
+  #  freq_dif_13 = (freq[3,0]-freq[2,0])/(act[3,2]-act[2,2]) - (freq[4,0]-2*freq[3,0]+freq[2,0])/(2*(act[3,2]-act[2,2]))
+   # freq_dif_21 = (freq[3,1]-freq[2,1])/(act[3,0]-act[2,0]) - (freq[4,1]-2*freq[3,1]+freq[2,1])/(2*(act[3,0]-act[2,0]))
+ #   freq_dif_22 = (freq[3,1]-freq[2,1])/(act[3,1]-act[2,1]) - (freq[4,1]-2*freq[3,1]+freq[2,1])/(2*(act[3,1]-act[2,1]))
+  #  freq_dif_23 = (freq[3,1]-freq[2,1])/(act[3,2]-act[2,2]) - (freq[4,1]-2*freq[3,1]+freq[2,1])/(2*(act[3,2]-act[2,2]))
+   # freq_dif_31 = (freq[3,2]-freq[2,2])/(act[3,0]-act[2,0]) - (freq[4,2]-2*freq[3,2]+freq[2,2])/(2*(act[3,0]-act[2,0]))
+ #   freq_dif_32 = (freq[3,2]-freq[2,2])/(act[3,1]-act[2,1]) - (freq[4,2]-2*freq[3,2]+freq[2,2])/(2*(act[3,1]-act[2,1]))
+  #  freq_dif_33 = (freq[3,2]-freq[2,2])/(act[3,2]-act[2,2]) - (freq[4,2]-2*freq[3,2]+freq[2,2])/(2*(act[3,2]-act[2,2]))
+
+    
+    #Central scheme, using all points
+    freq_dif_11 = (freq[3,0]-freq[1,0])/(act[3,0]-act[1,0]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,0]-act[1,0]))
+    freq_dif_12 = (freq[3,0]-freq[1,0])/(act[3,1]-act[1,1]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,1]-act[1,1]))
+    freq_dif_13 = (freq[3,0]-freq[1,0])/(act[3,2]-act[1,2]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,2]-act[1,2]))
+    freq_dif_21 = (freq[3,1]-freq[1,1])/(act[3,0]-act[1,0]) - (freq[4,1]-2*freq[2,1]+freq[0,1])/(2*(act[3,0]-act[1,0]))
+    freq_dif_22 = (freq[3,1]-freq[1,1])/(act[3,1]-act[1,1]) - (freq[4,1]-2*freq[2,1]+freq[0,1])/(2*(act[3,1]-act[1,1]))
+    freq_dif_23 = (freq[3,1]-freq[1,1])/(act[3,2]-act[1,2]) - (freq[4,1]-2*freq[2,1]+freq[0,1])/(2*(act[3,2]-act[1,2]))
+    freq_dif_31 = (freq[3,2]-freq[1,2])/(act[3,0]-act[1,0]) - (freq[4,2]-2*freq[2,2]+freq[0,2])/(2*(act[3,0]-act[1,0]))
+    freq_dif_32 = (freq[3,2]-freq[1,2])/(act[3,1]-act[1,1]) - (freq[4,2]-2*freq[2,2]+freq[0,2])/(2*(act[3,1]-act[1,1]))
+    freq_dif_33 = (freq[3,2]-freq[1,2])/(act[3,2]-act[1,2]) - (freq[4,2]-2*freq[2,2]+freq[0,2])/(2*(act[3,2]-act[1,2]))
+
+
+    D = np.matrix([[freq_dif_11, freq_dif_12, freq_dif_13], [freq_dif_21, freq_dif_22, freq_dif_23], [freq_dif_31,freq_dif_32,freq_dif_33]]) #Hessian matrix
+    return D
 
 def freq_check():
     """Check that the derivative of the hamiltonian with respect to J yields the frequencies obtained with Sanders"""
@@ -214,8 +252,16 @@ def freq_check():
 #Find eigenvalues of Hessian
 def eigenvalues_Hessian():
     """Calculate the three eigenvalues of Hessian for a given orbit"""
+    D = hessian_freq()
+    eigen_values = np.linalg.eigvals(D)
     return #lamda1,lambda2,lambda3
 
+
+#To run code:
+#inpput orbit initial conditions in kpc and kpc/myr
+#w0 = []
+#eig = eigenvalues_Hessian(w0)
+#print eig 
 
 
 #-----------To currently run code-----------#(will be more elegant when entire code is written)
@@ -224,7 +270,7 @@ params = grid_of_J_theta_orbit(w0)
 #I now want to check that the outputted grid of J/theta matches the inputted grid if we use the isochrone            
 actions = params[:,:3]                                                                                               
 action_array,angle_array = grid_of_AA(w0)                     
-print '---------New actions from x,v -> J, theta----------'
-print actions                                                                                                     
-print '---------Inputted actions from grid----------'                                                              
-print action_array[:2,:]
+#print '---------New actions from x,v -> J, theta----------'
+#print actions                                                                                                     
+#print '---------Inputted actions from grid----------'                                                              
+#print action_array[:2,:]
