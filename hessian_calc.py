@@ -214,12 +214,14 @@ def interpolate_J_freq_grid(w0):
    # sr = s.ravel()
     #print sr.shape
     print f1.shape
-    i = inter.LinearNDInterpolator(pts,f1)
-    j = inter.LinearNDInterpolator(pts,f2)
-    k = inter.LinearNDInterpolator(pts,f3)
-    print i([[0.28,0.4,0.8]])
+    f_i = inter.LinearNDInterpolator(pts,f1)
+    f_j = inter.LinearNDInterpolator(pts,f2)
+    f_k = inter.LinearNDInterpolator(pts,f3)
+    print f_i([[0.28,0.45,0.8]])
+    print f_j([[0.28,0.45,0.8]])
+    print f_k([[0.28,0.45,0.8]]) #the output of f_j and f_k are the same... Weird...
 
-    return i
+    return f_i,f_j,f_k
 
 #----------------------------------------------Step 6----------------------------------------------------#
 # Compute second derivative of Hamiltonian with respect to uniform grid of J's
