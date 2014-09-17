@@ -14,6 +14,7 @@ import sys
 import scipy.optimize as so
 import scipy.interpolate as inter
 import streamteam.integrate as si
+import streamteam.dynamics as sd
 from streamteam.potential.lm10 import LM10Potential
 import astropy.units as u
 from streamteam.dynamics.actionangle import find_actions, fit_isochrone
@@ -22,7 +23,8 @@ import logging
 from astropy import log as logger
 logger.setLevel(logging.DEBUG)
 from astropy.constants import G
-
+#potential = LM10Potential(q1=1.,q2=1.,q3=1.) # use this when finding hessian in spherical potential
+potential = LM10Potential() # use this when finding hessian in triaxial lm10
 usys = (u.kpc, u.Myr, u.Msun)
 G = G.decompose(usys).value
 
@@ -37,7 +39,7 @@ def find_J_theta(w0):
     """Input initial conditions in x,y,z,vx,vy,vz for a givin orbit, integrate this orbit forward in time,
     and obtain action, angles and frequencies for this orbit. Also retuns best paramters for isochrone"""
 
-    potential = LM10Potential() #imported from stream-team
+#    potential = LM10Potential() #imported from stream-team
 
 # the integrator requires a function that computes the acceleration
     acceleration = lambda t, *args: potential.acceleration(*args)
@@ -49,7 +51,8 @@ def find_J_theta(w0):
 #print v_new
 
 #    w0 = w0 #[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917] #[x]=kpc and [v]=kpc/MYR
-    t,w = integrator.run(w0, dt=1., nsteps=6000)
+#    t,w = integrator.run(w0, dt=1., nsteps=6000)
+    t,w = integrator.run(w0, dt=1., nsteps=6000) # APW
 
 # w is now the orbit with shape (time, number of orbits, number of dimensions)
 # so in this case it is (6000, 1, 6) -- e.g., to plot the orbit in the
@@ -62,9 +65,12 @@ def find_J_theta(w0):
     phase_space = np.squeeze(w)
 
 #Save 3 action, 3 angles, 3 frequencies for this orbit:
-    actions,angles,freqs = find_actions(t, phase_space, N_max=6, usys=usys)
+   
+    actions,angles,freqs = find_actions(t[::10], phase_space[::10], N_max=6, usys=usys)
     print '-------------------Pal5 actions in LM10-----------------'
     print actions
+    print  '-------------------Pal5 angles in LM10-----------------'
+    print angles
     print '-------------------Pal5 frequencies in LM10-----------------'
     print freqs
     print '-----------------------------------------------------------'
@@ -73,8 +79,8 @@ def find_J_theta(w0):
 # Below we store the best fit parameters from Isochrone potential
     M, b = fit_isochrone(w,usys=usys)
     #print actions, angles
-    Iso = IsochronePotential(M,b,usys=usys)
-    return actions,angles,freqs,M,b,Iso   
+    iso = IsochronePotential(M,b,usys=usys)
+    return actions,angles,freqs,M,b,iso   
 
 #------------------------------------------------Step 2----------------------------------------------------------#
 #Take a grid of (J,theta), use best toy (isocrhone) to analytically convert to (x,v)
@@ -82,38 +88,44 @@ def grid_of_AA(w0):
     """This function outputs a grid of action/angles around the actual action and angle for inputted orbit"""
 
 #Start with the actions and angles for the orbit above and maka a grid of actions                                                        
-    actions,angles,freqs,M,b,Iso = find_J_theta(w0)
-    ngrid = 3
-    fractional_stepsize = np.linspace(0.8,1.2,ngrid).reshape(1,ngrid) #20% variation              
+    actions,angles,freqs,M,b,iso = find_J_theta(w0)
+    ngrid = 3 #use 6 as default
+    fractional_stepsize = np.array([1.,1.25,1.5]).reshape(1,ngrid) #use for triaxial LM10
+   # fractional_stepsize = np.array([1.,1.1,1.2,1.3,1.4,1.5]).reshape(1,ngrid) 
     Pal5_actions = actions
     action_grid = fractional_stepsize * Pal5_actions.reshape(3,1)
     action_grid = np.meshgrid(*action_grid)
     J1,J2,J3 = map(np.ravel,action_grid)
     action_array = np.vstack((J1,J2,J3)).T
-    #print action_array.shape         
- #   h = actions.reshape(3,1)/100
-                                                                                                   
-#    action_grid = np.arange(-10,11).reshape(1,21)*h  # Computes 3x5 "matrix" with J1,J2,J3 and the 20 % variations       # I don't need grid, just two points in each direction around each J.
 
-   
-    #x = action_grid.T # Now I have a (5,3) matrix with five different sets of 3 action. The central one is the initial actions.
-    #action_array = np.zeros([15,3])
-    #action_array[5:15,0] = x[2,0] # All pf these values in x are now the initial J1 action from orbit
-    #action_array[0:5,0] = x[:,0]  # all of these values in x are now the 2h*J1,h*J1,J1,-hJ1,-2hJ1 
-    #action_array[0:5,1] = x[2,1]
-    #action_array[10:15,1] = x[2,1]
-    #action_array[5:10,1] = x[:,1]
-    #action_array[0:10,2] = x[2,2]
-    #action_array[10:15,2] = x[:,2] 
- #   print action_array
-    
-    #J1,J2,J3 = np.meshgrid(*action_grid)  #We want a 3D grid with all combinations of the J1,J2,J3s, not sure about *                  
-    #J1,J2,J3 = map(np.ravel,action_grid) #Flattens the 5x5x5 3d grids, (ask adr)                                                         
-  #  action_array = np.vstack((np.ravel(J1),np.ravel(J2),np.ravel(J3))).T #We now stack them and have a 125x3 array with all possible combinations                     
-   # print action_array.shape
-    
+
+    #print '-------------actions from grid----------'
+   # print action_array
+    # I need an angle array that is of the same size as the action_array but with the same angles in each line (len(action_array),3)
+    l = len(action_array)
     angle_array = angles.reshape(1,3)
+    angle_array = np.repeat(angle_array,l)
+    angle_array = angle_array.reshape(3,l)
+    angle_array = angle_array.T
     angle_array = np.squeeze(angle_array)
+    
+   # print '-------------angles from grid----------'
+   # print angle_array
+
+
+    plt.figure(1)
+    plt.plot(action_array[:,0],action_array[:,1],linestyle='none', marker = '.')
+   # plt.show()
+    plt.xlabel('J1')
+    plt.ylabel('J2')
+    plt.figure(2)
+    plt.plot(action_array[:,0],action_array[:,2], linestyle = 'none', marker = '*')
+   # plt.show()
+    plt.xlabel('J1')
+    plt.ylabel('J3')
+    np.save('Inputted_Actions.npy',action_array)
+
+
     return action_array,angle_array
 
 
@@ -124,15 +136,21 @@ def grid_of_xv(w0):
     6-phace space coordinates"""
     act,ang = grid_of_AA(w0)   #125x3 and 1x3
 #    print act, ang
-    a,an,fr,M,b,Iso = find_J_theta(w0)
+    print '------------check w0--------------------'
+    print w0
+    a,an,fr,M,b,iso = find_J_theta(w0)  #I only do this do get Iso
+   
     n = len(act)
-    potential = Iso
+    pot = iso
     xv_coordinates_grid = []
     for k in range(n):
-        X,V = potential.phase_space(act[k,:],ang[:])
+        X,V = pot.phase_space(act[k,:],ang[k,:])             #Something goes wrong here - input exact same actions + angles but get out different xvs 
         xv_coordinates_grid.append(np.append(X,V)) 
 
     xv_coordinates_grid = np.array(xv_coordinates_grid)
+  #  print '------------Check XV grid--------------------'
+  #  print xv_coordinates_grid
+   # print xv_coordinates_grid.shape
     return xv_coordinates_grid
 
 #-----------------------------------------------Step 3-----------------------------------------------------------#
@@ -143,13 +161,14 @@ def grid_of_xv(w0):
 def grid_of_J_theta_orbit(w0):
     """We now get action/angle grid for desired orbit (in the arbitrary potential).
     This will be used to calculate the Hessian for this orbit."""
-    actions,angles,freqs,M,b,Iso = find_J_theta(w0) #actually just do this to get M,b
+    actions,angles,freqs,M,b,iso = find_J_theta(w0) #actually just do this to get M,b
     params = []
     xv_coordinates = grid_of_xv(w0) #get grid of x,v from grid of action agnles shape (n,6)
-    
+    #print '-------XV coordinates check-------'
+    #print xv_coordinates
     n = len(xv_coordinates) # this should be same as len(act) from action grid
-    acceleration = lambda t, *args: Iso.acceleration(*args)
-    integrator = si.LeapfrogIntegrator(acceleration)
+    # acceleration = lambda t, *args: potential.acceleration(*args)
+    # integrator = si.LeapfrogIntegrator(acceleration)
     allvalues = dict()
     allvalues['actions'] = list()
     allvalues['angles'] = list()
@@ -157,18 +176,22 @@ def grid_of_J_theta_orbit(w0):
     for k in range(n):
     #    xv_coordinates, Iso = grid_of_xv(w0)
         w0 = xv_coordinates[k,:] #These are our initial conditions for all the new orbits
-        t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
+         # t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
+        t,w = potential.integrate_orbit(w0, dt=1., nsteps=10000) # new way of both integrating orbit in specified pot and getting time, pos, vel
         usys = (u.kpc, u.Myr, u.Msun) #Our init system                                                                            
         phase_space = np.squeeze(w)
-       
-        act,ang,freq = find_actions(t, phase_space, N_max=6, usys=usys)
+       # sd.plot_orbits(w)  #   - very useful when wanting to plot the integrated orbits
+       # plt.show()
+      
+        act,ang,freq = find_actions(t, phase_space, N_max=6, usys=usys, toy_potential=iso) # now using the same best fit iso for all new actions
+      
         allvalues['actions'].append(act)
         allvalues['angles'].append(ang)
         allvalues['freqs'].append(freq)
        
        
-      #  actions,angles = Iso.action_angle(phase_space[:,:3], phase_space[:,3:]) # Use LM10 here, this is just a check for iso coordinate trans
-       # params.append(np.append(actions[0],angles[0])) 
+       # actions,angles = Iso.action_angle(phase_space[:,:3], phase_space[:,3:]) # Use LM10 here, this is just a check for iso coordinate trans
+      #  params.append(np.append(actions[0],angles[0])) 
                
     
     
@@ -180,19 +203,20 @@ def grid_of_J_theta_orbit(w0):
     freq = np.array(freq)
     
 
-    plt.figure(2)
-    plt.plot(act[:,0],act[:,1],linestyle='none', marker = '.')
-    plt.show()
     plt.figure(3)
+    plt.plot(act[:,0],act[:,1],linestyle='none', marker = '.')
+    plt.xlabel('J1')
+    plt.ylabel('J2')
+   # plt.show()
+    plt.figure(4)
     plt.plot(act[:,0],act[:,2], linestyle = 'none', marker = '*')
+    plt.xlabel('J1')
+    plt.ylabel('J3')
     plt.show()
-    #params = np.array(params)
-    #return params
+   # params = np.array(params)
+    np.save('Outputted_Actions.npy',act)
+# return params
     return act,ang,freq
-
-
-
-#I should plot this new grid of j,theta
 
 
 #----------------------------------------------Step 5--------------------------------------------------------#
@@ -202,24 +226,26 @@ def interpolate_J_freq_grid(w0):
     interpolate the grid obtained in function grid_of_J_theta_orbit. Ideally we want it to still just 
     output a (5x3) matrix for each variable, where the central row is for our actual orbit."""
     # use inter.LinearNDInterpolator()
-    # we need to interpolate both actions and frequencies
+
     act,ang,freq = grid_of_J_theta_orbit(w0)
     J1,J2,J3 = act[:,0], act[:,1], act[:,2]
     f1,f2,f3 = freq[:,0], freq[:,1], freq[:,2]
-#    pts = np.array((act[:,0], act[:,1], act[:,2]))
     pts = np.array([J1,J2,J3]).T
-    print pts.shape
- #   s  = np.exp(-(J1**2 + J2**2 + J3**2)/2)
-  #  print s.shape
-   # sr = s.ravel()
-    #print sr.shape
-    print f1.shape
-    f_i = inter.LinearNDInterpolator(pts,f1)
+
+    
+    # Now using interpolater to be able to "call" any frequiency of any grid point in J1,J2,J3
+    f_i = inter.LinearNDInterpolator(pts,f1)   #f must have same dimenstions as first dimension of pts#
     f_j = inter.LinearNDInterpolator(pts,f2)
     f_k = inter.LinearNDInterpolator(pts,f3)
-    print f_i([[0.28,0.45,0.8]])
-    print f_j([[0.28,0.45,0.8]])
-    print f_k([[0.28,0.45,0.8]]) #the output of f_j and f_k are the same... Weird...
+    
+
+    print f_i([[0.31543636,  0.01574003,  1.35940611]]) #these are initial actions in LM10 triaxial
+    print f_j([[0.31543636,  0.01574003,  1.35940611]])
+    print f_k([[0.31543636,  0.01574003,  1.35940611]]) 
+
+#    print f_i([[0.33463731,  0.94387294,  1.56471129]]) # these are initial actions in LM10(q1=1,q2=2,q3=3)
+ #   print f_i([[0.33463731,  0.94387294,  1.56471129]])
+  #  print f_i([[0.33463731,  0.94387294,  1.56471129]])
 
     return f_i,f_j,f_k
 
@@ -236,20 +262,7 @@ def hessian_freq(w0):
     # keep two of J's constant while differentiating with respect to 1.
     act, ang, freq = grid_of_J_theta_orbit(w0) #this should be the interpolated grid not the orbit grid
     
-    #The action and frequencies grids are both of size (15,3)
-    
-     #Forward scheme, only using some of points on grid
-  #  freq_dif_11 = (freq[3,0]-freq[2,0])/(act[3,0]-act[2,0]) - (freq[4,0]-2*freq[3,0]+freq[2,0])/(2*(act[3,0]-act[2,0]))
-   # freq_dif_12 = (freq[3,0]-freq[2,0])/(act[3,1]-act[2,1]) - (freq[4,0]-2*freq[3,0]+freq[2,0])/(2*(act[3,1]-act[2,1]))
-  #  freq_dif_13 = (freq[3,0]-freq[2,0])/(act[3,2]-act[2,2]) - (freq[4,0]-2*freq[3,0]+freq[2,0])/(2*(act[3,2]-act[2,2]))
-   # freq_dif_21 = (freq[3,1]-freq[2,1])/(act[3,0]-act[2,0]) - (freq[4,1]-2*freq[3,1]+freq[2,1])/(2*(act[3,0]-act[2,0]))
- #   freq_dif_22 = (freq[3,1]-freq[2,1])/(act[3,1]-act[2,1]) - (freq[4,1]-2*freq[3,1]+freq[2,1])/(2*(act[3,1]-act[2,1]))
-  #  freq_dif_23 = (freq[3,1]-freq[2,1])/(act[3,2]-act[2,2]) - (freq[4,1]-2*freq[3,1]+freq[2,1])/(2*(act[3,2]-act[2,2]))
-   # freq_dif_31 = (freq[3,2]-freq[2,2])/(act[3,0]-act[2,0]) - (freq[4,2]-2*freq[3,2]+freq[2,2])/(2*(act[3,0]-act[2,0]))
- #   freq_dif_32 = (freq[3,2]-freq[2,2])/(act[3,1]-act[2,1]) - (freq[4,2]-2*freq[3,2]+freq[2,2])/(2*(act[3,1]-act[2,1]))
-  #  freq_dif_33 = (freq[3,2]-freq[2,2])/(act[3,2]-act[2,2]) - (freq[4,2]-2*freq[3,2]+freq[2,2])/(2*(act[3,2]-act[2,2]))
-
-    
+          
     #Central scheme, using all points
     freq_dif_11 = (freq[3,0]-freq[1,0])/(act[3,0]-act[1,0]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,0]-act[1,0]))
     freq_dif_12 = (freq[3,0]-freq[1,0])/(act[3,1]-act[1,1]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,1]-act[1,1]))
@@ -291,7 +304,18 @@ def eigenvalues_Hessian():
 
 
 #-----------To currently run code-----------#(will be more elegant when entire code is written)
+# Stream-fan orbit
 w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
+
+
+
+# Spherical orbit (change LM10 to q1=1,q2=1,q3=1)
+#Things that change is spherical run so far: potential, initital pal5 actions in interpolation, stepsize of grid, w0
+#v_new = ([-42.640370,-114.249685,-17.028021]*u.km/u.s).to(u.kpc/u.Myr).value
+#print v_new
+# we should read in the initial Pal5 actions in spherical case to out interpolation function
+#w0 =[8.161671207, 0.224760075, 16.962073974, -0.04360883, -0.11684454, -0.01741476]
+
 
 
 
