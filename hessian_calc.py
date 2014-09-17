@@ -23,14 +23,28 @@ import logging
 from astropy import log as logger
 logger.setLevel(logging.DEBUG)
 from astropy.constants import G
-#potential = LM10Potential(q1=1.,q2=1.,q3=1.) # use this when finding hessian in spherical potential
-potential = LM10Potential() # use this when finding hessian in triaxial lm10
 usys = (u.kpc, u.Myr, u.Msun)
 G = G.decompose(usys).value
 
 cache_path = "/home/spearson/Hessian/stream-team/hessian"
 
-#np.random.seed(42)#Current issues: it uses the orbit integration function in several steps. I could write that smarter.
+#---------------------- We want to check both LM10() triax & LM10(q1=1,q2=1,q3=1)-------------------------
+
+#-------------Triaxial run: LM10()--------------#
+#potential = LM10Potential()
+#w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]                                                                                         
+#ngrid = 3
+#fractional_stepsize = np.array([1.,1.25,1.5]).reshape(1,ngrid) 
+#fractional_stepsize = np.array([1.,1.1,1.2,1.3,1.4,1.5]).reshape(1,ngrid)    
+#Pal5_J_init = np.array([0.31543636,  0.01574003,  1.35940611])   
+
+
+#--------------SPHERICAL RUN: lm10(q1=1,q2=1,q3=1)---------------
+potential = LM10Potential(q1=1.,q2=1.,q3=1.) 
+w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]     
+ngrid = 3 
+fractional_stepsize = np.array([0.5,1.,1.5]).reshape(1,ngrid) #for spherical lm10      
+Pal5_J_init = np.array([0.36960528 , 0.82496629,  1.56947659])
 
 
 #------------------------------------------------Step 1----------------------------------------------------------#
@@ -89,9 +103,6 @@ def grid_of_AA(w0):
 
 #Start with the actions and angles for the orbit above and maka a grid of actions                                                        
     actions,angles,freqs,M,b,iso = find_J_theta(w0)
-    ngrid = 3 #use 6 as default
-    fractional_stepsize = np.array([1.,1.25,1.5]).reshape(1,ngrid) #use for triaxial LM10
-   # fractional_stepsize = np.array([1.,1.1,1.2,1.3,1.4,1.5]).reshape(1,ngrid) 
     Pal5_actions = actions
     action_grid = fractional_stepsize * Pal5_actions.reshape(3,1)
     action_grid = np.meshgrid(*action_grid)
@@ -238,15 +249,10 @@ def interpolate_J_freq_grid(w0):
     f_j = inter.LinearNDInterpolator(pts,f2)
     f_k = inter.LinearNDInterpolator(pts,f3)
     
-
-    print f_i([[0.31543636,  0.01574003,  1.35940611]]) #these are initial actions in LM10 triaxial
-    print f_j([[0.31543636,  0.01574003,  1.35940611]])
-    print f_k([[0.31543636,  0.01574003,  1.35940611]]) 
-
-#    print f_i([[0.33463731,  0.94387294,  1.56471129]]) # these are initial actions in LM10(q1=1,q2=2,q3=3)
- #   print f_i([[0.33463731,  0.94387294,  1.56471129]])
-  #  print f_i([[0.33463731,  0.94387294,  1.56471129]])
-
+    print f_i([[Pal5_J_init[0],Pal5_J_init[1], Pal5_J_init[2]]])
+    print f_j([[Pal5_J_init[0],Pal5_J_init[1], Pal5_J_init[2]]])
+    print f_k([[Pal5_J_init[0],Pal5_J_init[1], Pal5_J_init[2]]])
+   
     return f_i,f_j,f_k
 
 #----------------------------------------------Step 6----------------------------------------------------#
@@ -296,49 +302,14 @@ def eigenvalues_Hessian():
     return #lamda1,lambda2,lambda3
 
 
-#To run code:
-#inpput orbit initial conditions in kpc and kpc/myr
-#w0 = []
-#eig = eigenvalues_Hessian(w0)
-#print eig 
-
-
-#-----------To currently run code-----------#(will be more elegant when entire code is written)
-# Stream-fan orbit
-w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]
-
-
 
 # Spherical orbit (change LM10 to q1=1,q2=1,q3=1)
-#Things that change is spherical run so far: potential, initital pal5 actions in interpolation, stepsize of grid, w0
 #v_new = ([-42.640370,-114.249685,-17.028021]*u.km/u.s).to(u.kpc/u.Myr).value
-#print v_new
-# we should read in the initial Pal5 actions in spherical case to out interpolation function
 #w0 =[8.161671207, 0.224760075, 16.962073974, -0.04360883, -0.11684454, -0.01741476]
 
 
 
-
-
 i = interpolate_J_freq_grid(w0)
-#J1_new = i([[]])
-#J2_new =
-#J3_new =
 
-
-#actions,angles,freq = grid_of_J_theta_orbit(w0)
-#I now want to check that the outputted grid of J/theta matches the inputted grid if we use the isochrone            
-
-#action_array,angle_array = grid_of_AA(w0)                     
-
-#params = grid_of_J_theta_orbit(w0)
-
-#print '---------New actions from x,v -> J, theta----------'
-#print 'actions'
-#print actions
-#print 'angles'
-#print angles                                                                                                   
-#print '---------Inputted actions from grid----------'                                                              
-#print action_array[:,:], angle_array[:]
 
 
