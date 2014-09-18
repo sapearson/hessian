@@ -13,6 +13,7 @@ import sympy as sp
 import sys
 import scipy.optimize as so
 import scipy.interpolate as inter
+import scipy
 import streamteam.integrate as si
 import streamteam.dynamics as sd
 from streamteam.potential.lm10 import LM10Potential
@@ -30,24 +31,23 @@ cache_path = "/home/spearson/Hessian/stream-team/hessian"
 
 #---------------------- We want to check both LM10() triax & LM10(q1=1,q2=1,q3=1)-------------------------
 
-#-------------Triaxial run: LM10()--------------#
+#----------------------------------Triaxial run: LM10()--------------------------------------------#
 #potential = LM10Potential()
-#w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]                                                                                         
+#w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]                        
 #ngrid = 3
 #fractional_stepsize = np.array([1.,1.25,1.5]).reshape(1,ngrid) 
 #fractional_stepsize = np.array([1.,1.1,1.2,1.3,1.4,1.5]).reshape(1,ngrid)    
-#Pal5_J_init = np.array([0.31543636,  0.01574003,  1.35940611])   
 
-
-#--------------SPHERICAL RUN: lm10(q1=1,q2=1,q3=1)---------------
+#---------------------------------SPHERICAL RUN: lm10(q1=1,q2=1,q3=1)------------------------------#
 potential = LM10Potential(q1=1.,q2=1.,q3=1.) 
 w0=[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917]     
 ngrid = 3 
 fractional_stepsize = np.array([0.5,1.,1.5]).reshape(1,ngrid) #for spherical lm10      
-Pal5_J_init = np.array([0.36960528 , 0.82496629,  1.56947659])
 
 
+#----------------------------------------------------------------------------------------------------------------#
 #------------------------------------------------Step 1----------------------------------------------------------#
+#----------------------------------------------------------------------------------------------------------------#
 # Find (J,theta) for Pal 5 (stream fannining) in LM10 using Sanders' code
 def find_J_theta(w0):
     """Input initial conditions in x,y,z,vx,vy,vz for a givin orbit, integrate this orbit forward in time,
@@ -67,13 +67,6 @@ def find_J_theta(w0):
 #    w0 = w0 #[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917] #[x]=kpc and [v]=kpc/MYR
 #    t,w = integrator.run(w0, dt=1., nsteps=6000)
     t,w = integrator.run(w0, dt=1., nsteps=6000) # APW
-
-# w is now the orbit with shape (time, number of orbits, number of dimensions)
-# so in this case it is (6000, 1, 6) -- e.g., to plot the orbit in the
-#X-y plane:
-#Check that we get the same orbit as with our own leapfrog integrator for Pal5
-#plt.plot(w[:,0,0], w[:,0,1])
-#plt.show()
 
 #np.squeeze removes any 1-D dimension of ndarray.
     phase_space = np.squeeze(w)
@@ -223,7 +216,7 @@ def grid_of_J_theta_orbit(w0):
     plt.plot(act[:,0],act[:,2], linestyle = 'none', marker = '*')
     plt.xlabel('J1')
     plt.ylabel('J3')
-    plt.show()
+    #plt.show()
    # params = np.array(params)
     np.save('Outputted_Actions.npy',act)
 # return params
@@ -237,7 +230,7 @@ def interpolate_J_freq_grid(w0):
     interpolate the grid obtained in function grid_of_J_theta_orbit. Ideally we want it to still just 
     output a (5x3) matrix for each variable, where the central row is for our actual orbit."""
     # use inter.LinearNDInterpolator()
-
+    Pal5_J_init,angles_init,freqs_init,M,b,iso = find_J_theta(w0)
     act,ang,freq = grid_of_J_theta_orbit(w0)
     J1,J2,J3 = act[:,0], act[:,1], act[:,2]
     f1,f2,f3 = freq[:,0], freq[:,1], freq[:,2]
@@ -266,22 +259,54 @@ def hessian_freq(w0):
     # We will have interpolated frequencies uniform in action/angle space for arbitrary potential.
     
     # keep two of J's constant while differentiating with respect to 1.
-    act, ang, freq = grid_of_J_theta_orbit(w0) #this should be the interpolated grid not the orbit grid
+    J_init,angles_init,freqs_init,M,b,iso = find_J_theta(w0)
+    f1,f2,f3 = interpolate_J_freq_grid(w0)  #returns frequency of some arbitrary choise of actions (within the grid size)
     
+    J1_m2 = J_init[0] - 0.002
+    J1_m1 = J_init[0] - 0.001
+    J1_p1 = J_init[0] + 0.001
+    J1_p2 = J_init[0] + 0.002
+
+    J2_m2 = J_init[1] - 0.002
+    J2_m1 = J_init[1] - 0.001
+    J2_p1 = J_init[1] + 0.001
+    J2_p2 = J_init[1] + 0.002
+
+    J3_m2 = J_init[2] - 0.002
+    J3_m1 = J_init[2] - 0.001
+    J3_p1 = J_init[2] + 0.001
+    J3_p2 = J_init[2] + 0.002
+
+
+    # I need to choose the stepsize... have two different steps back and forth
+   # 0,1,2,3,4, 2 is my pal5 init
           
-    #Central scheme, using all points
-    freq_dif_11 = (freq[3,0]-freq[1,0])/(act[3,0]-act[1,0]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,0]-act[1,0]))
-    freq_dif_12 = (freq[3,0]-freq[1,0])/(act[3,1]-act[1,1]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,1]-act[1,1]))
-    freq_dif_13 = (freq[3,0]-freq[1,0])/(act[3,2]-act[1,2]) - (freq[4,0]-2*freq[2,0]+freq[0,0])/(2*(act[3,2]-act[1,2]))
-    freq_dif_21 = (freq[3,1]-freq[1,1])/(act[3,0]-act[1,0]) - (freq[4,1]-2*freq[2,1]+freq[0,1])/(2*(act[3,0]-act[1,0]))
-    freq_dif_22 = (freq[3,1]-freq[1,1])/(act[3,1]-act[1,1]) - (freq[4,1]-2*freq[2,1]+freq[0,1])/(2*(act[3,1]-act[1,1]))
-    freq_dif_23 = (freq[3,1]-freq[1,1])/(act[3,2]-act[1,2]) - (freq[4,1]-2*freq[2,1]+freq[0,1])/(2*(act[3,2]-act[1,2]))
-    freq_dif_31 = (freq[3,2]-freq[1,2])/(act[3,0]-act[1,0]) - (freq[4,2]-2*freq[2,2]+freq[0,2])/(2*(act[3,0]-act[1,0]))
-    freq_dif_32 = (freq[3,2]-freq[1,2])/(act[3,1]-act[1,1]) - (freq[4,2]-2*freq[2,2]+freq[0,2])/(2*(act[3,1]-act[1,1]))
-    freq_dif_33 = (freq[3,2]-freq[1,2])/(act[3,2]-act[1,2]) - (freq[4,2]-2*freq[2,2]+freq[0,2])/(2*(act[3,2]-act[1,2]))
+    #Central scheme, using all points, computing 9 matrix elements for Hessian
+    freq_dif_11 = (f1([[J1_p1,J_init[1],J_init[2]]]) - f1([[J1_m1,J_init[1],J_init[2]]]))/(J1_p1-J1_m1) - (f1([[J1_p2,J_init[1],J_init[2]]]) - 2*f1([[J_init[0],J_init[1],J_init[2]]]) + f1([[J1_m2,J_init[1],J_init[2]]]))/(2*(J1_p1-J1_m1))
+
+    freq_dif_12 = (f1([[J_init[0],J2_p1,J_init[2]]]) - f1([[J_init[0],J2_m1,J_init[2]]]))/(J2_p1-J2_m1) - (f1([[J_init[0],J2_p2,J_init[2]]]) - 2*f1([[J_init[0],J_init[1],J_init[2]]]) + f1([[J_init[0],J2_m2,J_init[2]]]))/(2*(J2_p1-J2_m1))
+
+    freq_dif_13 = (f1([[J_init[0],J_init[1],J3_p1]]) - f1([[J_init[0],J_init[1],J3_m1]]))/(J3_p1-J3_m1) - (f1([[J_init[0],J_init[1],J3_p2]]) - 2*f1([[J_init[0],J_init[1],J_init[2]]]) + f1([[J_init[0],J_init[1],J3_p2]]))/(2*(J3_p1-J3_m1))
 
 
-    D = np.matrix([[freq_dif_11, freq_dif_12, freq_dif_13], [freq_dif_21, freq_dif_22, freq_dif_23], [freq_dif_31,freq_dif_32,freq_dif_33]]) #Hessian matrix
+    freq_dif_21 = (f2([[J1_p1,J_init[1],J_init[2]]]) - f2([[J1_m1,J_init[1],J_init[2]]]))/(J1_p1-J1_m1) - (f2([[J1_p2,J_init[1],J_init[2]]]) - 2*f2([[J_init[0],J_init[1],J_init[2]]]) + f2([[J1_m2,J_init[1],J_init[2]]]))/(2*(J1_p1-J1_m1))
+
+    freq_dif_22 = (f2([[J_init[0],J2_p1,J_init[2]]]) - f2([[J_init[0],J2_m1,J_init[2]]]))/(J2_p1-J2_m1) - (f2([[J_init[0],J2_p2,J_init[2]]]) - 2*f2([[J_init[0],J_init[1],J_init[2]]]) + f2([[J_init[0],J2_m2,J_init[2]]]))/(2*(J2_p1-J2_m1))
+
+    freq_dif_23 = (f2([[J_init[0],J_init[1],J3_p1]]) - f2([[J_init[0],J_init[1],J3_m1]]))/(J3_p1-J3_m1) - (f2([[J_init[0],J_init[1],J3_p2]]) - 2*f2([[J_init[0],J_init[1],J_init[2]]]) + f2([[J_init[0],J_init[1],J3_p2]]))/(2*(J3_p1-J3_m1))
+
+
+    freq_dif_31 = (f3([[J1_p1,J_init[1],J_init[2]]]) - f3([[J1_m1,J_init[1],J_init[2]]]))/(J1_p1-J1_m1) - (f3([[J1_p2,J_init[1],J_init[2]]]) - 2*f3([[J_init[0],J_init[1],J_init[2]]]) + f3([[J1_m2,J_init[1],J_init[2]]]))/(2*(J1_p1-J1_m1))
+
+    freq_dif_32 = (f3([[J_init[0],J2_p1,J_init[2]]]) - f3([[J_init[0],J2_m1,J_init[2]]]))/(J2_p1-J2_m1) - (f3([[J_init[0],J2_p2,J_init[2]]]) - 2*f3([[J_init[0],J_init[1],J_init[2]]]) + f3([[J_init[0],J2_m2,J_init[2]]]))/(2*(J2_p1-J2_m1))
+
+    freq_dif_33 = (f3([[J_init[0],J_init[1],J3_p1]]) - f3([[J_init[0],J_init[1],J3_m1]]))/(J3_p1-J3_m1) - (f3([[J_init[0],J_init[1],J3_p2]]) - 2*f3([[J_init[0],J_init[1],J_init[2]]]) + f3([[J_init[0],J_init[1],J3_p2]]))/(2*(J3_p1-J3_m1))
+
+
+    D = np.array([[freq_dif_11, freq_dif_12, freq_dif_13], [freq_dif_21, freq_dif_22, freq_dif_23], [freq_dif_31,freq_dif_32,freq_dif_33]]) #Hessian matrix
+    D = np.squeeze(D)
+    print D
+    print D.shape
     return D
 
 def freq_check():
@@ -295,11 +320,12 @@ def freq_check():
 
 #----------------------------------------------Step 7---------------------------------------------#
 #Find eigenvalues of Hessian
-def eigenvalues_Hessian():
+def eigenvalues_Hessian(w0):
     """Calculate the three eigenvalues of Hessian for a given orbit"""
-    D = hessian_freq()
-    eigen_values = np.linalg.eigvals(D)
-    return #lamda1,lambda2,lambda3
+    D = hessian_freq(w0)
+    eig_values, eig_vectors = np.linalg.eig(D)
+    print eig_values
+    return eig_values
 
 
 
@@ -309,7 +335,7 @@ def eigenvalues_Hessian():
 
 
 
-i = interpolate_J_freq_grid(w0)
-
-
+#i = interpolate_J_freq_grid(w0)
+#D = hessian_freq(w0)
+lamda = eigenvalues_Hessian(w0)
 
