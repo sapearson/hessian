@@ -7,8 +7,6 @@ The action/angles/frequencies are also calculated for this orbit. """
 
 __author__ = "spearson <spearson@astro.columbia.edu>"
 
-from __future__ import division
-
 # Standard library
 import logging
 import sys
@@ -203,20 +201,28 @@ def grid_of_J_theta_orbit(w0):
     allvalues['actions'] = list()
     allvalues['angles'] = list()
     allvalues['freqs'] = list()
-    for k in range(n):
-    #    xv_coordinates, Iso = grid_of_xv(w0)
-        w0 = xv_coordinates[k,:] #These are our initial conditions for all the new orbits
-         # t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
-        t,w = potential.integrate_orbit(w0, dt=0.2, nsteps=50000, Integrator=si.DOPRI853Integrator) # new way of both integrating orbit in specified pot and getting time, pos, vel
-        phase_space = np.squeeze(w)
-       # sd.plot_orbits(w)  #   - very useful when wanting to plot the integrated orbits
-       # plt.show()
 
-        act,ang,freq = find_actions(t, phase_space, N_max=6, units=galactic, toy_potential=iso) # now using the same best fit iso for all new actions
+    # new way of both integrating orbit in specified pot and getting time, pos, vel
+    t,w = potential.integrate_orbit(xv_coordinates, dt=0.2, nsteps=50000, Integrator=si.DOPRI853Integrator)
 
-        allvalues['actions'].append(act)
-        allvalues['angles'].append(ang)
-        allvalues['freqs'].append(freq)
+    # now using the same best fit iso for all new actions
+    aaf = find_actions(t[::10], w[::10], N_max=6, units=galactic, toy_potential=iso)
+    allvalues['actions'],allvalues['angles'],allvalues['freqs'] = aaf
+
+    # for k in range(n):
+    # #    xv_coordinates, Iso = grid_of_xv(w0)
+    #     w0 = xv_coordinates[k,:] #These are our initial conditions for all the new orbits
+    #      # t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
+    #     t,w = potential.integrate_orbit(w0, dt=0.2, nsteps=50000, Integrator=si.DOPRI853Integrator) # new way of both integrating orbit in specified pot and getting time, pos, vel
+    #     phase_space = np.squeeze(w)
+    #    # sd.plot_orbits(w)  #   - very useful when wanting to plot the integrated orbits
+    #    # plt.show()
+
+    #     act,ang,freq = find_actions(t, phase_space, N_max=6, units=galactic, toy_potential=iso) # now using the same best fit iso for all new actions
+
+    #     allvalues['actions'].append(act)
+    #     allvalues['angles'].append(ang)
+    #     allvalues['freqs'].append(freq)
 
 
        # actions,angles = Iso.action_angle(phase_space[:,:3], phase_space[:,3:]) # Use LM10 here, this is just a check for iso coordinate trans
