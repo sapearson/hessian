@@ -207,7 +207,7 @@ def grid_of_J_theta_orbit(w0):
     #    xv_coordinates, Iso = grid_of_xv(w0)
         w0 = xv_coordinates[k,:] #These are our initial conditions for all the new orbits
          # t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
-        t,w = potential.integrate_orbit(w0, dt=1., nsteps=10000, Integrator=si.DOPRI853Integrator) # new way of both integrating orbit in specified pot and getting time, pos, vel
+        t,w = potential.integrate_orbit(w0, dt=0.2, nsteps=50000, Integrator=si.DOPRI853Integrator) # new way of both integrating orbit in specified pot and getting time, pos, vel
         phase_space = np.squeeze(w)
        # sd.plot_orbits(w)  #   - very useful when wanting to plot the integrated orbits
        # plt.show()
