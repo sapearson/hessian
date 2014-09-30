@@ -348,7 +348,7 @@ def freq_check():
 def eigenvalues_Hessian(w0):
     """Calculate the three eigenvalues of Hessian for a given orbit"""
     D = hessian_freq(w0)
-    eig_values, eig_vectors = np.linalg.eig(D)
+    eig_values, eig_vectors = np.linalg.eigh(D) # eigh -> for hermitian/symmetric matrices
     print '---------------Eigenvalues---------------'
     print eig_values
     return eig_values
