@@ -86,18 +86,13 @@ def find_J_theta(w0):
 
 #    potential = LM10Potential() #imported from stream-team
 
-# the integrator requires a function that computes the acceleration
-    acceleration = lambda t, *args: potential.acceleration(*args)
-    integrator = si.LeapfrogIntegrator(acceleration)
-
 #Convert from initial conditions for Pal5's orbit to new units
 #(x,y,z,vx,vy,vz) in kpc and kpc/Myr
 #v_new = ([-56.969978, -100.396842, -3.323685]*u.km/u.s).to(u.kpc/u.Myr).value
 #print v_new
 
 #    w0 = w0 #[8.161671207, 0.224760075, 16.962073974, -0.05826389, -0.10267707,-0.00339917] #[x]=kpc and [v]=kpc/MYR
-#    t,w = integrator.run(w0, dt=1., nsteps=6000)
-    t,w = integrator.run(w0, dt=1., nsteps=6000) # APW
+    t,w = potential.integrate_orbit(w0, dt=0.2, nsteps=50000, Integrator=si.DOPRI853Integrator)
 
 #np.squeeze removes any 1-D dimension of ndarray.
     phase_space = np.squeeze(w)
@@ -115,7 +110,7 @@ def find_J_theta(w0):
 
 #Our units are [actions] = kpc*kpc/Myr (where Sanders' are kpc*km/s)
 # Below we store the best fit parameters from Isochrone potential
-    M, b = fit_isochrone(w,units=galactic)
+    M, b = fit_isochrone(w, units=galactic)
     #print actions, angles
     iso = IsochronePotential(M,b,units=galactic)
     return actions,angles,freqs,M,b,iso
@@ -212,8 +207,7 @@ def grid_of_J_theta_orbit(w0):
     #    xv_coordinates, Iso = grid_of_xv(w0)
         w0 = xv_coordinates[k,:] #These are our initial conditions for all the new orbits
          # t,w = integrator.run(w0, dt=1., nsteps=100000) #we integrate each of these orbits to get J,theta for each orbit
-        t,w = potential.integrate_orbit(w0, dt=1., nsteps=10000) # new way of both integrating orbit in specified pot and getting time, pos, vel
-        usys = (u.kpc, u.Myr, u.Msun) #Our init system
+        t,w = potential.integrate_orbit(w0, dt=1., nsteps=10000, Integrator=si.DOPRI853Integrator) # new way of both integrating orbit in specified pot and getting time, pos, vel
         phase_space = np.squeeze(w)
        # sd.plot_orbits(w)  #   - very useful when wanting to plot the integrated orbits
        # plt.show()
